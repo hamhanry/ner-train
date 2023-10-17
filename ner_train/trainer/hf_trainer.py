@@ -78,13 +78,11 @@ class hfTrainer:
         self.set_checkpoint_path(checkpoint_dir)
         self.initialized_tokenizer(config=self.config)
         self.initialize_trainer_variables(config=self.config)
+        self.initialize_loggers(config=self.config)
         self.initialize_train_test_loader(config=self.config)
         self.build_model(config=self.config)
         self.configure_optimizer(config=self.config)
         self.configure_scheduler(config=self.config, optimizer=self.optimizer)
-        self.load_checkpoint(config=self.config)
-        self.set_classes_info(config=self.config)
-        self.set_eval_threshold_from(config=self.config)
 
     def environment_setup(self, config: Adict):
         torch.backends.cudnn.benchmark = config.get("benchmark", False)
@@ -113,12 +111,16 @@ class hfTrainer:
                 }
         
         train_df = pd.read_csv(config.dataset.train_dataset.csv_path)
-        train_dataset = train_df.sample(frac=config.dataset.train_dataset.train_size,random_state=200)
-        test_dataset = train_df.drop(train_dataset.index).reset_index(drop=True)
-        train_dataset = train_dataset.reset_index(drop=True)
+        one_hot = pd.get_dummies(train_df['Category'])
+        train_df = pd.concat([train_df, one_hot], axis=1, join='inner')
+        train_df['list'] = train_df[train_df.columns[2:]].values.tolist()
+        
+        train_set = train_df.sample(frac=config.dataset.train_dataset.train_size,random_state=200)
+        test_set = train_df.drop(train_set.index).reset_index(drop=True)
+        train_set = train_set.reset_index(drop=True)
 
-        self.train_dataset = ResumeDataset(train_dataset, self.tokenizer, config.dataset.max_len)
-        self.test_dataset = ResumeDataset(test_dataset, self.tokenizer, config.dataset.max_len)
+        self.train_dataset = ResumeDataset(train_set, self.tokenizer, config.dataset.max_len)
+        self.test_dataset = ResumeDataset(test_set, self.tokenizer, config.dataset.max_len)
         self.train_loader = DataLoader(self.train_dataset, **train_params)
         self.test_loader = DataLoader(self.test_dataset, **test_params)
         # self.train_data.drop(['Resume_html','ID'],axis=1,inplace=True)
@@ -260,7 +262,7 @@ class hfTrainer:
         classif_loss_meter = AverageMeter("classif_loss")
         train_acc_meter = AverageMeter("train_acc")
         acc_calculator = accuracy.MulticlassAccuracy(
-            num_classes=len(self.data_labels)
+            num_classes=config.hparams.model.num_classes
         )
         acc_calculator.to(self.device)
 
@@ -280,10 +282,11 @@ class hfTrainer:
             self.logger.info("[EPOCH %d]: TRAINING", self.current_epoch)
             for _ in range(self.iter_per_epoch):
                 batch_dict = next(train_loader)
-                ids = batch_dict['ids'].to(self.device, dtype = torch.long)
-                mask = batch_dict['mask'].to(self.device, dtype = torch.long)
-                token_type_ids = batch_dict['token_type_ids'].to(self.device, dtype = torch.long)
-                targets = batch_dict['targets'].to(self.device, dtype = torch.float)
+                print(batch_dict)
+                ids = batch_dict['ids'].to(self.device, non_blocking=True)
+                mask = batch_dict['mask'].to(self.device, non_blocking=True)
+                token_type_ids = batch_dict['token_type_ids'].to(self.device, non_blocking=True)
+                targets = batch_dict['targets'].to(self.device, non_blocking=True)
 
                 self.optimizer.zero_grad()
                 with torch.autocast(

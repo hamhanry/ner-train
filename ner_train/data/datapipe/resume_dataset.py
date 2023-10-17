@@ -1,3 +1,4 @@
+import torch
 from torch.utils.data import Dataset
 
 class ResumeDataset(Dataset):
@@ -5,8 +6,8 @@ class ResumeDataset(Dataset):
     def __init__(self, dataframe, tokenizer, max_len):
         self.tokenizer = tokenizer
         self.data = dataframe
-        self.resume = dataframe.resume
-        self.targets = self.data.list
+        self.resume = self.data['resume']
+        self.targets = self.data['list']
         self.max_len = max_len
 
     def __len__(self):
