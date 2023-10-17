@@ -29,6 +29,9 @@ from torchvision.transforms import Compose
 import nltk
 from nltk.corpus import stopwords
 
+import transformers
+from transformers import BertTokenizer,BertModel,BertConfig
+
 from ner_train.data.transform.basic import basic_preprocessing, remove_duplicates
 from ner_train.data.datapipe.resume_dataset import ResumeDataset
 from ner_train.utils.general import *
@@ -73,6 +76,7 @@ class hfTrainer:
         self.environment_setup(config=self.config)
         self.set_device(config=self.config)
         self.set_checkpoint_path(checkpoint_dir)
+        self.initialized_tokenizer(config=self.config)
         self.initialize_trainer_variables(config=self.config)
         self.initialize_train_test_loader(config=self.config)
         self.build_model(config=self.config)
@@ -100,21 +104,21 @@ class hfTrainer:
     def initialize_train_test_loader(self, config: Adict):
         train_params = {'batch_size': config.hparams.batch_size,
                 'shuffle': True,
-                'num_workers': 0
+                'num_workers': config.num_workers
                 }
 
         test_params = {'batch_size': config.hparams.batch_size,
                 'shuffle': True,
-                'num_workers': 0
+                'num_workers': config.num_workers
                 }
         
         train_df = pd.read_csv(config.dataset.train_dataset.csv_path)
         train_dataset = train_df.sample(frac=config.dataset.train_dataset.train_size,random_state=200)
-        test_dataset = train_dataset.drop(train_dataset.index).reset_index(drop=True)
+        test_dataset = train_df.drop(train_dataset.index).reset_index(drop=True)
         train_dataset = train_dataset.reset_index(drop=True)
 
-        self.train_dataset = ResumeDataset(train_dataset, config.hparams.tokenizer, config.hparams.max_len)
-        self.test_dataset = ResumeDataset(test_dataset, config.hparams.tokenizer, config.hparams.max_len)
+        self.train_dataset = ResumeDataset(train_dataset, self.tokenizer, config.dataset.max_len)
+        self.test_dataset = ResumeDataset(test_dataset, self.tokenizer, config.dataset.max_len)
         self.train_loader = DataLoader(self.train_dataset, **train_params)
         self.test_loader = DataLoader(self.test_dataset, **test_params)
         # self.train_data.drop(['Resume_html','ID'],axis=1,inplace=True)
@@ -184,6 +188,9 @@ class hfTrainer:
             self.model = torch.nn.DataParallel(self.model)
 
         self.criterion_cls = object_from_dict(config.hparams.criterion_cls)
+
+    def initialized_tokenizer(self, config:Adict):
+        self.tokenizer = BertTokenizer.from_pretrained(config.hparams.model.pretrained_name)
 
     def configure_optimizer(self, config: Adict):
         # --------------------------------- optimizer -------------------------------- #
