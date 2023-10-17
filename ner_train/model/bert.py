@@ -2,11 +2,11 @@ import torch
 import transformers
 
 class BERTClass(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, drop_rate:int, pretrained_name:str, num_classes:int):
         super(BERTClass, self).__init__()
-        self.l1 = transformers.BertModel.from_pretrained('bert-base-uncased')
-        self.l2 = torch.nn.Dropout(0.3)
-        self.l3 = torch.nn.Linear(768, 24)
+        self.l1 = transformers.BertModel.from_pretrained(pretrained_name)
+        self.l2 = torch.nn.Dropout(drop_rate)
+        self.l3 = torch.nn.Linear(768, num_classes)
 
     def forward(self, ids, mask, token_type_ids):
         _, output_1= self.l1(ids, attention_mask = mask, token_type_ids = token_type_ids, return_dict=False)
