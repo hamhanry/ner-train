@@ -31,6 +31,8 @@ def flatten_dict(d, parent_key="", sep="_"):
             items.append((new_key, v))
     return dict(items)
 
+def is_homogenous_iterable(iterable_obj, type_=int):
+    return all(isinstance(el, type_) for el in iterable_obj)
 
 def get_head_commit():
     file_path = str(Path(__file__).parent.absolute())

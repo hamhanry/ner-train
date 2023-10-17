@@ -16,7 +16,6 @@ import torch
 import torch.backends.cudnn
 import torch.optim
 import torch.utils.data.distributed
-import torchdata.datapipes.iter as IDP
 import yaml
 from addict import Dict as Adict
 
@@ -98,7 +97,7 @@ class hfTrainer:
         self.max_iter: int = config.hparams.max_iter
         self.max_epoch: int = config.hparams.get("max_epoch", 0)
 
-    def initialize_train_loader(self, config: Adict):
+    def initialize_train_test_loader(self, config: Adict):
         train_params = {'batch_size': config.hparams.batch_size,
                 'shuffle': True,
                 'num_workers': 0
@@ -109,15 +108,15 @@ class hfTrainer:
                 'num_workers': 0
                 }
         
-        train_df = pd.read_csv(config.hparams.train_csv)
-        train_dataset = train_df.sample(frac=config.hparams.train_size,random_state=200)
-        test_dataset = self.train_dataset.drop(self.train_dataset.index).reset_index(drop=True)
-        train_dataset = self.train_dataset.reset_index(drop=True)
+        train_df = pd.read_csv(config.dataset.train_dataset.csv_path)
+        train_dataset = train_df.sample(frac=config.dataset.train_dataset.train_size,random_state=200)
+        test_dataset = train_dataset.drop(train_dataset.index).reset_index(drop=True)
+        train_dataset = train_dataset.reset_index(drop=True)
 
         self.train_dataset = ResumeDataset(train_dataset, config.hparams.tokenizer, config.hparams.max_len)
         self.test_dataset = ResumeDataset(test_dataset, config.hparams.tokenizer, config.hparams.max_len)
-        self.train_loader = DataLoader(self.training_set, **train_params)
-        self.test_loader = DataLoader(self.testing_set, **test_params)
+        self.train_loader = DataLoader(self.train_dataset, **train_params)
+        self.test_loader = DataLoader(self.test_dataset, **test_params)
         # self.train_data.drop(['Resume_html','ID'],axis=1,inplace=True)
         # self.train_data['Resume_str'] = self.train_data['Resume_str'].apply(basic_preprocessing)
         # self.train_data.rename(columns = {'Resume_str':'resume'}, inplace = True)
