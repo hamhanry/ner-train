@@ -23,6 +23,7 @@ from iglovikov_helper_functions.config_parsing.utils import object_from_dict
 from torch import Tensor
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader
+from torchmetrics import Accuracy
 from torchmetrics.classification import accuracy
 from torchvision.transforms import Compose
 
@@ -106,7 +107,7 @@ class hfTrainer:
                 }
 
         test_params = {'batch_size': config.hparams.batch_size,
-                'shuffle': True,
+                'shuffle': False,
                 'num_workers': config.num_workers
                 }
         
@@ -260,11 +261,39 @@ class hfTrainer:
 
         train_loss_meter = AverageMeter("train_loss")
         classif_loss_meter = AverageMeter("classif_loss")
-        train_acc_meter = AverageMeter("train_acc")
-        acc_calculator = accuracy.MulticlassAccuracy(
+        train_top1_acc_meter = AverageMeter("train_top1_acc")
+        train_top2_acc_meter = AverageMeter("train_top2_acc")
+        train_top5_acc_meter = AverageMeter("train_top5_acc")
+        train_top10_acc_meter = AverageMeter("train_top10_acc")
+        # acc_calculator = accuracy.MulticlassAccuracy(
+        #     num_classes=config.hparams.model.num_classes
+        # )
+        acc_top1_calculator = Accuracy(
+            task="multiclass",
             num_classes=config.hparams.model.num_classes
         )
-        acc_calculator.to(self.device)
+        acc_top1_calculator.to(self.device)
+
+        acc_top2_calculator = Accuracy(
+            task="multiclass",
+            num_classes=config.hparams.model.num_classes,
+            top_k = 2
+        )
+        acc_top2_calculator.to(self.device)
+
+        acc_top5_calculator = Accuracy(
+            task="multiclass",
+            num_classes=config.hparams.model.num_classes,
+            top_k = 5
+        )
+        acc_top5_calculator.to(self.device)
+
+        acc_top10_calculator = Accuracy(
+            task="multiclass",
+            num_classes=config.hparams.model.num_classes,
+            top_k = 10
+        )
+        acc_top10_calculator.to(self.device)
 
         if self.max_epoch:
             max_epoch = self.max_epoch
@@ -281,8 +310,12 @@ class hfTrainer:
 
             self.logger.info("[EPOCH %d]: TRAINING", self.current_epoch)
             for _ in range(self.iter_per_epoch):
-                batch_dict = next(train_loader)
-                print(batch_dict)
+                try:
+                    batch_dict = next(train_loader)
+                except StopIteration:
+                    train_loader = iter(self.train_loader)
+                    batch_dict = next(train_loader)
+
                 ids = batch_dict['ids'].to(self.device, non_blocking=True)
                 mask = batch_dict['mask'].to(self.device, non_blocking=True)
                 token_type_ids = batch_dict['token_type_ids'].to(self.device, non_blocking=True)
@@ -300,7 +333,7 @@ class hfTrainer:
                     )
 
                     train_loss: Tensor = (
-                        classif_loss * config.hparams.lambda_cls
+                        classif_loss #* config.hparams.lambda_cls
                     )
 
                     if train_loss.isnan():
@@ -310,13 +343,23 @@ class hfTrainer:
                         )
 
                 # ---------------------------- multiclass accuracy --------------------------- #
-                train_acc: Tensor = acc_calculator(cls_out, targets)
+                # print("\ncls_out\n")
+                # print(cls_out.shape, cls_out)
+                # print("\ntargets\n")
+                # print(targets.shape, targets)
+                train_top1_acc: Tensor = acc_top1_calculator(cls_out, targets)
+                train_top2_acc: Tensor = acc_top2_calculator(cls_out, targets)
+                train_top5_acc: Tensor = acc_top5_calculator(cls_out, targets)
+                train_top10_acc: Tensor = acc_top10_calculator(cls_out, targets)
 
                 # ------------------------- running metric statistics ------------------------ #
-                minibatch_size = batch_dict.shape[0]
+                minibatch_size = batch_dict['mask'].shape[0]
                 classif_loss_meter.update(classif_loss.item(), n=minibatch_size)
                 train_loss_meter.update(train_loss.item(), n=minibatch_size)
-                train_acc_meter.update(train_acc.item(), n=minibatch_size)
+                train_top1_acc_meter.update(train_top1_acc.item(), n=minibatch_size)
+                train_top2_acc_meter.update(train_top2_acc.item(), n=minibatch_size)
+                train_top5_acc_meter.update(train_top5_acc.item(), n=minibatch_size)
+                train_top10_acc_meter.update(train_top10_acc.item(), n=minibatch_size)
 
                 self.grad_scaler.scale(train_loss).backward()
                 self.grad_scaler.unscale_(self.optimizer)
@@ -343,9 +386,14 @@ class hfTrainer:
                         "train_loss": train_loss.item(),
                         "classif_loss_avg": classif_loss_meter.avg,
                         "classif_loss": classif_loss.item(),
-                        "train_acc_avg": train_acc_meter.avg,
-                        "train_acc_cal": acc_calculator.compute().item(),
-                        "train_acc": train_acc.item(),
+                        "train_top1_acc_cal": acc_top1_calculator.compute().item(),
+                        "train_top1_acc": train_top1_acc.item(),
+                        "train_top2_acc_cal": acc_top2_calculator.compute().item(),
+                        "train_top2_acc": train_top2_acc.item(),
+                        "train_top5_acc_cal": acc_top5_calculator.compute().item(),
+                        "train_top5_acc": train_top5_acc.item(),
+                        "train_top10_acc_cal": acc_top10_calculator.compute().item(),
+                        "train_top10_acc": train_top10_acc.item(),
                         "epoch": self.current_epoch,
                         "optim_lr": self.optimizer.param_groups[0]["lr"],
                     }
@@ -359,8 +407,14 @@ class hfTrainer:
             log_dict = {
                 "train_loss_avg": train_loss_meter.avg,
                 "classif_loss_avg": classif_loss_meter.avg,
-                "train_acc_avg": train_acc_meter.avg,
-                "train_acc_cal": acc_calculator.compute().item(),
+                "train_acc_top1_avg": train_top1_acc_meter.avg,
+                "train_acc_top1_cal": acc_top1_calculator.compute().item(),
+                "train_acc_top2_avg": train_top2_acc_meter.avg,
+                "train_acc_top2_cal": acc_top2_calculator.compute().item(),
+                "train_acc_top5_avg": train_top5_acc_meter.avg,
+                "train_acc_top5_cal": acc_top5_calculator.compute().item(),
+                "train_acc_top10_avg": train_top5_acc_meter.avg,
+                "train_acc_top10_cal": acc_top5_calculator.compute().item(),
                 "epoch": self.current_epoch,
                 "optim_lr": self.optimizer.param_groups[0]["lr"],
             }
