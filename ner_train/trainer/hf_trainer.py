@@ -506,19 +506,22 @@ class hfTrainer:
         
         val_acc_top2_calculator = Accuracy(
             task="multiclass",
-            num_classes=config.hparams.model.num_classes
+            num_classes=config.hparams.model.num_classes,
+            top_k = 2
         )
         val_acc_top2_calculator.to(self.device)
         
         val_acc_top5_calculator = Accuracy(
             task="multiclass",
-            num_classes=config.hparams.model.num_classes
+            num_classes=config.hparams.model.num_classes,
+            top_k = 5
         )
         val_acc_top5_calculator.to(self.device)
         
         val_acc_top10_calculator = Accuracy(
             task="multiclass",
-            num_classes=config.hparams.model.num_classes
+            num_classes=config.hparams.model.num_classes,
+            top_k = 10
         )
         val_acc_top10_calculator.to(self.device)
 
