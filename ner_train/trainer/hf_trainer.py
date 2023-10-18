@@ -387,13 +387,13 @@ class hfTrainer:
                         "train_loss": train_loss.item(),
                         "classif_loss_avg": classif_loss_meter.avg,
                         "classif_loss": classif_loss.item(),
-                        "train_top1_acc_cal": acc_top1_calculator.compute().item(),
+                        "train_top1_acc": acc_top1_calculator.compute().item(),
                         "train_top1_acc": train_top1_acc.item(),
-                        "train_top2_acc_cal": acc_top2_calculator.compute().item(),
+                        "train_top2_acc": acc_top2_calculator.compute().item(),
                         "train_top2_acc": train_top2_acc.item(),
-                        "train_top5_acc_cal": acc_top5_calculator.compute().item(),
+                        "train_top5_acc": acc_top5_calculator.compute().item(),
                         "train_top5_acc": train_top5_acc.item(),
-                        "train_top10_acc_cal": acc_top10_calculator.compute().item(),
+                        "train_top10_acc": acc_top10_calculator.compute().item(),
                         "train_top10_acc": train_top10_acc.item(),
                         "epoch": self.current_epoch,
                         "optim_lr": self.optimizer.param_groups[0]["lr"],
@@ -409,22 +409,22 @@ class hfTrainer:
                 "train_loss_avg": train_loss_meter.avg,
                 "classif_loss_avg": classif_loss_meter.avg,
                 "train_acc_top1_avg": train_top1_acc_meter.avg,
-                "train_acc_top1_cal": acc_top1_calculator.compute().item(),
+                "train_acc_top1": acc_top1_calculator.compute().item(),
                 "train_acc_top2_avg": train_top2_acc_meter.avg,
-                "train_acc_top2_cal": acc_top2_calculator.compute().item(),
+                "train_acc_top2": acc_top2_calculator.compute().item(),
                 "train_acc_top5_avg": train_top5_acc_meter.avg,
-                "train_acc_top5_cal": acc_top5_calculator.compute().item(),
+                "train_acc_top5": acc_top5_calculator.compute().item(),
                 "train_acc_top10_avg": train_top5_acc_meter.avg,
-                "train_acc_top10_cal": acc_top5_calculator.compute().item(),
+                "train_acc_top10": acc_top5_calculator.compute().item(),
                 "epoch": self.current_epoch,
                 "optim_lr": self.optimizer.param_groups[0]["lr"],
             }
 
-            # self.set_modules_eval()
-            # val_log_dict = self.run_validation(
-            #     config=config
-            # )
-            # log_dict.update(val_log_dict)
+            self.set_modules_eval()
+            val_log_dict = self.run_validation(
+                config=config
+            )
+            log_dict.update(val_log_dict)
 
             self.logger.info(
                 "[EPOCH %d]: SAVING CHECKPOINT", self.current_epoch
@@ -469,7 +469,7 @@ class hfTrainer:
         for val_iter, batch_dict in enumerate(self.test_loader):
             if val_iter % config.log_every_n_step == 0:
                 self.logger.info(
-                    "[EPOCH %d]: Evaluating %s -- iter %d",
+                    "[EPOCH %d]: Evaluating -- iter %d",
                     self.current_epoch,
                     val_iter,
                 )
@@ -486,8 +486,14 @@ class hfTrainer:
                 val_classif_losses.append(test_loss.item())
             
             preds = torch.softmax(outputs, dim=1)
+            
             fin_predictions.append(preds.cpu())
             fin_targets.append(targets.cpu())
+        
+        # print(fin_predictions.size)
+        # print(fin_targets.size)
+        fin_predictions = torch.cat(fin_predictions).cpu()
+        fin_targets = torch.cat(fin_targets).cpu()
         
         val_classif_loss = np.mean(val_classif_losses)
         val_loss = val_classif_loss
@@ -522,12 +528,12 @@ class hfTrainer:
         val_top10_acc: Tensor = val_acc_top10_calculator(fin_predictions, fin_targets)
 
         all_log_dicts = {
-            "val_loss_avg": val_loss.avg,
-            "classif_loss_avg": val_classif_loss.avg,
-            "val_acc_top1_cal": val_top1_acc.item(),
-            "val_acc_top2_cal":val_top2_acc.item(),
-            "val_acc_top5_cal": val_top5_acc.item(),
-            "val_acc_top10_cal": val_top10_acc.item()
+            "val_loss": val_loss.item(),
+            "classif_loss": val_classif_loss.item(),
+            "val_acc_top1": val_top1_acc.item(),
+            "val_acc_top2":val_top2_acc.item(),
+            "val_acc_top5": val_top5_acc.item(),
+            "val_acc_top10": val_top10_acc.item()
         }
         
         return all_log_dicts
