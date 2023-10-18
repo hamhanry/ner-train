@@ -327,7 +327,8 @@ class hfTrainer:
                 ):
                     cls_out: Tensor
                     cls_out = self.model(ids, mask, token_type_ids)
-
+                    cls_out = torch.softmax(cls_out, dim=1)
+                    
                     classif_loss: Tensor = self.criterion_cls(
                         cls_out, targets
                     )
@@ -419,8 +420,8 @@ class hfTrainer:
                 "optim_lr": self.optimizer.param_groups[0]["lr"],
             }
 
-            self.set_modules_eval()
-            # val_log_dict, prediction_dataframes = self.run_validation(
+            # self.set_modules_eval()
+            # val_log_dict = self.run_validation(
             #     config=config
             # )
             # log_dict.update(val_log_dict)
@@ -440,7 +441,6 @@ class hfTrainer:
                 log_dict,
                 self.global_step,
             )
-            # self._save_pred_df(prediction_dataframes)
             self.logger.info(
                 "[EPOCH %d]: SUCCESS LOGGING MLFLOW METRICS",
                 self.current_epoch,
@@ -457,19 +457,80 @@ class hfTrainer:
         client.set_terminated(self.mlflow_logger.run_id, status="FINISHED")
         self.logger.info("DONE TRAINING!")
 
-    # def validation(self):
-    #     fin_targets=[]
-    #     fin_outputs=[]
-    #     with torch.no_grad():
-    #         for _, data in enumerate(self.test_loader):
-    #             ids = data['ids'].to(self.device, dtype = torch.long)
-    #             mask = data['mask'].to(self.device, dtype = torch.long)
-    #             token_type_ids = data['token_type_ids'].to(self.device, dtype = torch.long)
-    #             targets = data['targets'].to(self.device, dtype = torch.float)
-    #             outputs = model(ids, mask, token_type_ids)
-    #             fin_targets.extend(targets.cpu().detach().numpy().tolist())
-    #             fin_outputs.extend(torch.sigmoid(outputs).cpu().detach().numpy().tolist())
-    #     return fin_outputs, fin_targets
+    @torch.no_grad()
+    def run_validation(
+        self, config: Adict
+    ) -> Tuple[Dict[str, float]]:
+        all_log_dicts = {}
+        val_classif_losses: List[Tensor] = []
+        fin_predictions = []
+        fin_targets = []
+        batch_dict: Dict[Tensor, Tensor, Tensor, Tensor]
+        for val_iter, batch_dict in enumerate(self.test_loader):
+            if val_iter % config.log_every_n_step == 0:
+                self.logger.info(
+                    "[EPOCH %d]: Evaluating %s -- iter %d",
+                    self.current_epoch,
+                    val_iter,
+                )
+            
+            ids = batch_dict['ids'].to(self.device, non_blocking=True)
+            mask = batch_dict['mask'].to(self.device, non_blocking=True)
+            token_type_ids = batch_dict['token_type_ids'].to(self.device, non_blocking=True)
+            targets = batch_dict['targets'].to(self.device, non_blocking=True)
+            with torch.autocast(
+                device_type=self.device, enabled=config.amp.enabled
+            ):
+                outputs = self.model(ids, mask, token_type_ids)
+                test_loss = self.criterion_cls(outputs, targets)
+                val_classif_losses.append(test_loss.item())
+            
+            preds = torch.softmax(outputs, dim=1)
+            fin_predictions.append(preds.cpu())
+            fin_targets.append(targets.cpu())
+        
+        val_classif_loss = np.mean(val_classif_losses)
+        val_loss = val_classif_loss
+        
+        val_acc_top1_calculator = Accuracy(
+            task="multiclass",
+            num_classes=config.hparams.model.num_classes
+        )
+        val_acc_top1_calculator.to(self.device)
+        
+        val_acc_top2_calculator = Accuracy(
+            task="multiclass",
+            num_classes=config.hparams.model.num_classes
+        )
+        val_acc_top2_calculator.to(self.device)
+        
+        val_acc_top5_calculator = Accuracy(
+            task="multiclass",
+            num_classes=config.hparams.model.num_classes
+        )
+        val_acc_top5_calculator.to(self.device)
+        
+        val_acc_top10_calculator = Accuracy(
+            task="multiclass",
+            num_classes=config.hparams.model.num_classes
+        )
+        val_acc_top10_calculator.to(self.device)
+
+        val_top1_acc: Tensor = val_acc_top1_calculator(fin_predictions, fin_targets)
+        val_top2_acc: Tensor = val_acc_top2_calculator(fin_predictions, fin_targets)
+        val_top5_acc: Tensor = val_acc_top5_calculator(fin_predictions, fin_targets)
+        val_top10_acc: Tensor = val_acc_top10_calculator(fin_predictions, fin_targets)
+
+        all_log_dicts = {
+            "val_loss_avg": val_loss.avg,
+            "classif_loss_avg": val_classif_loss.avg,
+            "val_acc_top1_cal": val_top1_acc.item(),
+            "val_acc_top2_cal":val_top2_acc.item(),
+            "val_acc_top5_cal": val_top5_acc.item(),
+            "val_acc_top10_cal": val_top10_acc.item()
+        }
+        
+        return all_log_dicts
 
 def run_training(args, config):
     trainer = hfTrainer(
