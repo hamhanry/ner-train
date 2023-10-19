@@ -23,8 +23,7 @@ from iglovikov_helper_functions.config_parsing.utils import object_from_dict
 from torch import Tensor
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader
-from torchmetrics import Accuracy
-from torchmetrics.classification import accuracy
+from torchmetrics import Accuracy, F1Score
 from torchvision.transforms import Compose
 
 import nltk
@@ -265,9 +264,13 @@ class hfTrainer:
         train_top2_acc_meter = AverageMeter("train_top2_acc")
         train_top5_acc_meter = AverageMeter("train_top5_acc")
         train_top10_acc_meter = AverageMeter("train_top10_acc")
-        # acc_calculator = accuracy.MulticlassAccuracy(
-        #     num_classes=config.hparams.model.num_classes
-        # )
+        train_top1_f1_meter = AverageMeter("train_top1_f1")
+        train_top2_f1_meter = AverageMeter("train_top2_f1")
+        train_top5_f1_meter = AverageMeter("train_top5_f1")
+        train_top10_f1_meter = AverageMeter("train_top10_f1")
+        
+        # ACCURACY TOPK
+        #---------------------------------------------------------------------------
         acc_top1_calculator = Accuracy(
             task="multiclass",
             num_classes=config.hparams.model.num_classes
@@ -294,6 +297,36 @@ class hfTrainer:
             top_k = 10
         )
         acc_top10_calculator.to(self.device)
+
+        # F1Score TOPK
+        #---------------------------------------------------------------------------
+        f1_top1_calculator = F1Score(
+            task="multiclass",
+            num_classes=config.hparams.model.num_classes
+        )
+        f1_top1_calculator.to(self.device)
+
+        f1_top2_calculator = F1Score(
+            task="multiclass",
+            num_classes=config.hparams.model.num_classes,
+            top_k = 2
+        )
+        f1_top2_calculator.to(self.device)
+
+        f1_top5_calculator = F1Score(
+            task="multiclass",
+            num_classes=config.hparams.model.num_classes,
+            top_k = 5
+        )
+        f1_top5_calculator.to(self.device)
+
+        f1_top10_calculator = F1Score(
+            task="multiclass",
+            num_classes=config.hparams.model.num_classes,
+            top_k = 10
+        )
+        f1_top10_calculator.to(self.device)
+        #---------------------------------------------------------------------------
 
         if self.max_epoch:
             max_epoch = self.max_epoch
@@ -331,7 +364,7 @@ class hfTrainer:
                         cls_out, targets
                     )
 
-                    cls_out = torch.softmax(cls_out, dim=1)
+                    # cls_out = torch.softmax(cls_out, dim=1)
                     train_loss: Tensor = (
                         classif_loss #* config.hparams.lambda_cls
                     )
@@ -351,12 +384,20 @@ class hfTrainer:
                 train_top2_acc: Tensor = acc_top2_calculator(cls_out, targets)
                 train_top5_acc: Tensor = acc_top5_calculator(cls_out, targets)
                 train_top10_acc: Tensor = acc_top10_calculator(cls_out, targets)
+                train_top1_f1: Tensor = f1_top1_calculator(cls_out, targets)
+                train_top2_f1: Tensor = f1_top2_calculator(cls_out, targets)
+                train_top5_f1: Tensor = f1_top5_calculator(cls_out, targets)
+                train_top10_f1: Tensor = f1_top10_calculator(cls_out, targets)
 
                 # ------------------------- running metric statistics ------------------------ #
                 minibatch_size = batch_dict['mask'].shape[0]
                 classif_loss_meter.update(classif_loss.item(), n=minibatch_size)
                 train_loss_meter.update(train_loss.item(), n=minibatch_size)
                 train_top1_acc_meter.update(train_top1_acc.item(), n=minibatch_size)
+                train_top2_acc_meter.update(train_top2_acc.item(), n=minibatch_size)
+                train_top5_acc_meter.update(train_top5_acc.item(), n=minibatch_size)
+                train_top10_acc_meter.update(train_top10_acc.item(), n=minibatch_size)
+                train_top1_f1_meter.update(train_top1_acc.item(), n=minibatch_size)
                 train_top2_acc_meter.update(train_top2_acc.item(), n=minibatch_size)
                 train_top5_acc_meter.update(train_top5_acc.item(), n=minibatch_size)
                 train_top10_acc_meter.update(train_top10_acc.item(), n=minibatch_size)
@@ -394,6 +435,14 @@ class hfTrainer:
                         "train_top5_acc": train_top5_acc.item(),
                         "train_top10_acc": acc_top10_calculator.compute().item(),
                         "train_top10_acc": train_top10_acc.item(),
+                        "train_top1_f1": f1_top1_calculator.compute().item(),
+                        "train_top1_f1": train_top1_f1.item(),
+                        "train_top2_f1": f1_top2_calculator.compute().item(),
+                        "train_top2_f1": train_top2_f1.item(),
+                        "train_top5_f1": f1_top5_calculator.compute().item(),
+                        "train_top5_f1": train_top5_f1.item(),
+                        "train_top10_f1": f1_top10_calculator.compute().item(),
+                        "train_top10_f1": train_top10_f1.item(),
                         "epoch": self.current_epoch,
                         "optim_lr": self.optimizer.param_groups[0]["lr"],
                     }
@@ -415,6 +464,14 @@ class hfTrainer:
                 "train_acc_top5": acc_top5_calculator.compute().item(),
                 "train_acc_top10_avg": train_top5_acc_meter.avg,
                 "train_acc_top10": acc_top5_calculator.compute().item(),
+                "train_f1_top1_avg": train_top1_f1_meter.avg,
+                "train_f1_top1": f1_top1_calculator.compute().item(),
+                "train_f1_top2_avg": train_top2_f1_meter.avg,
+                "train_f1_top2": f1_top2_calculator.compute().item(),
+                "train_f1_top5_avg": train_top5_f1_meter.avg,
+                "train_f1_top5": f1_top5_calculator.compute().item(),
+                "train_f1_top10_avg": train_top5_f1_meter.avg,
+                "train_f1_top10": f1_top5_calculator.compute().item(),
                 "epoch": self.current_epoch,
                 "optim_lr": self.optimizer.param_groups[0]["lr"],
             }
@@ -484,11 +541,11 @@ class hfTrainer:
                 test_loss = self.criterion_cls(outputs, targets)
                 val_classif_losses.append(test_loss.item())
             
-            preds = torch.softmax(outputs, dim=1)
+            # preds = torch.softmax(outputs, dim=1)
             
-            fin_predictions.append(preds)
+            # fin_predictions.append(preds)
             fin_targets.append(targets)
-            # fin_predictions.append(outputs)
+            fin_predictions.append(outputs)
         
         # fin_predictions: Tensor = fin_predictions
         # fin_targets: Tensor = fin_targets
