@@ -326,13 +326,12 @@ class hfTrainer:
                     device_type=self.device, enabled=config.amp.enabled
                 ):
                     cls_out: Tensor
-                    cls_out = self.model(ids, mask, token_type_ids)
-                    cls_out = torch.softmax(cls_out, dim=1)
-                    
+                    cls_out = self.model(ids, mask, token_type_ids)                    
                     classif_loss: Tensor = self.criterion_cls(
                         cls_out, targets
                     )
 
+                    cls_out = torch.softmax(cls_out, dim=1)
                     train_loss: Tensor = (
                         classif_loss #* config.hparams.lambda_cls
                     )
@@ -426,13 +425,13 @@ class hfTrainer:
             )
             log_dict.update(val_log_dict)
 
-            self.logger.info(
-                "[EPOCH %d]: SAVING CHECKPOINT", self.current_epoch
-            )
-            self.save_checkpoint()
-            self.logger.info(
-                "[EPOCH %d]: SAVING CHECKPOINT SUCCESS", self.current_epoch
-            )
+            # self.logger.info(
+            #     "[EPOCH %d]: SAVING CHECKPOINT", self.current_epoch
+            # )
+            # self.save_checkpoint()
+            # self.logger.info(
+            #     "[EPOCH %d]: SAVING CHECKPOINT SUCCESS", self.current_epoch
+            # )
 
             self.logger.info(
                 "[EPOCH %d]: LOGGING MLFLOW METRICS", self.current_epoch
@@ -487,14 +486,18 @@ class hfTrainer:
             
             preds = torch.softmax(outputs, dim=1)
             
-            fin_predictions.append(preds.cpu())
-            fin_targets.append(targets.cpu())
+            fin_predictions.append(preds)
+            fin_targets.append(targets)
+            # fin_predictions.append(outputs)
         
+        # fin_predictions: Tensor = fin_predictions
+        # fin_targets: Tensor = fin_targets
+
         # print(fin_predictions.size)
         # print(fin_targets.size)
-        fin_predictions = torch.cat(fin_predictions).cpu()
-        fin_targets = torch.cat(fin_targets).cpu()
-        
+        fin_predictions = torch.cat(fin_predictions)
+        fin_targets = torch.cat(fin_targets)
+    
         val_classif_loss = np.mean(val_classif_losses)
         val_loss = val_classif_loss
         
