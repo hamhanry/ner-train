@@ -29,8 +29,7 @@ from torchvision.transforms import Compose
 import nltk
 from nltk.corpus import stopwords
 
-import transformers
-from transformers import BertTokenizer,BertModel,BertConfig
+from transformers import AutoModel, AutoTokenizer
 
 from ner_train.data.transform.basic import basic_preprocessing, remove_duplicates
 from ner_train.data.datapipe.resume_dataset import ResumeDataset
@@ -192,7 +191,7 @@ class hfTrainer:
         self.criterion_cls = object_from_dict(config.hparams.criterion_cls)
 
     def initialized_tokenizer(self, config:Adict):
-        self.tokenizer = BertTokenizer.from_pretrained(config.hparams.model.pretrained_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(config.hparams.model.pretrained_name)
 
     def configure_optimizer(self, config: Adict):
         # --------------------------------- optimizer -------------------------------- #

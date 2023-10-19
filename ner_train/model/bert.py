@@ -1,10 +1,10 @@
 import torch
-import transformers
+from transformers import AutoModel
 
 class BERTClass(torch.nn.Module):
     def __init__(self, drop_rate:int, pretrained_name:str, num_classes:int):
         super(BERTClass, self).__init__()
-        self.l1 = transformers.BertModel.from_pretrained(pretrained_name)
+        self.l1 = AutoModel.from_pretrained(pretrained_name)
         self.l2 = torch.nn.Dropout(drop_rate)
         self.l3 = torch.nn.Linear(768, num_classes)
 
