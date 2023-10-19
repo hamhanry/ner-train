@@ -396,10 +396,10 @@ class hfTrainer:
                 train_top2_acc_meter.update(train_top2_acc.item(), n=minibatch_size)
                 train_top5_acc_meter.update(train_top5_acc.item(), n=minibatch_size)
                 train_top10_acc_meter.update(train_top10_acc.item(), n=minibatch_size)
-                train_top1_f1_meter.update(train_top1_acc.item(), n=minibatch_size)
-                train_top2_acc_meter.update(train_top2_acc.item(), n=minibatch_size)
-                train_top5_acc_meter.update(train_top5_acc.item(), n=minibatch_size)
-                train_top10_acc_meter.update(train_top10_acc.item(), n=minibatch_size)
+                train_top1_f1_meter.update(train_top1_f1.item(), n=minibatch_size)
+                train_top2_f1_meter.update(train_top2_f1.item(), n=minibatch_size)
+                train_top5_f1_meter.update(train_top5_f1.item(), n=minibatch_size)
+                train_top10_f1_meter.update(train_top10_f1.item(), n=minibatch_size)
 
                 self.grad_scaler.scale(train_loss).backward()
                 self.grad_scaler.unscale_(self.optimizer)
@@ -540,23 +540,17 @@ class hfTrainer:
                 test_loss = self.criterion_cls(outputs, targets)
                 val_classif_losses.append(test_loss.item())
             
-            # preds = torch.softmax(outputs, dim=1)
-            
-            # fin_predictions.append(preds)
             fin_targets.append(targets)
             fin_predictions.append(outputs)
         
-        # fin_predictions: Tensor = fin_predictions
-        # fin_targets: Tensor = fin_targets
-
-        # print(fin_predictions.size)
-        # print(fin_targets.size)
         fin_predictions = torch.cat(fin_predictions)
         fin_targets = torch.cat(fin_targets)
     
         val_classif_loss = np.mean(val_classif_losses)
         val_loss = val_classif_loss
         
+        # ACCURACY TOPK
+        #---------------------------------------------------------------------------
         val_acc_top1_calculator = Accuracy(
             task="multiclass",
             num_classes=config.hparams.model.num_classes
@@ -584,10 +578,44 @@ class hfTrainer:
         )
         val_acc_top10_calculator.to(self.device)
 
+        # F1 TOPK
+        #---------------------------------------------------------------------------
+        val_f1_top1_calculator = F1Score(
+            task="multiclass",
+            num_classes=config.hparams.model.num_classes
+        )
+        val_f1_top1_calculator.to(self.device)
+        
+        val_f1_top2_calculator = F1Score(
+            task="multiclass",
+            num_classes=config.hparams.model.num_classes,
+            top_k = 2
+        )
+        val_f1_top2_calculator.to(self.device)
+        
+        val_f1_top5_calculator = F1Score(
+            task="multiclass",
+            num_classes=config.hparams.model.num_classes,
+            top_k = 5
+        )
+        val_f1_top5_calculator.to(self.device)
+        
+        val_f1_top10_calculator = F1Score(
+            task="multiclass",
+            num_classes=config.hparams.model.num_classes,
+            top_k = 10
+        )
+        val_f1_top10_calculator.to(self.device)
+        #---------------------------------------------------------------------------
+
         val_top1_acc: Tensor = val_acc_top1_calculator(fin_predictions, fin_targets)
         val_top2_acc: Tensor = val_acc_top2_calculator(fin_predictions, fin_targets)
         val_top5_acc: Tensor = val_acc_top5_calculator(fin_predictions, fin_targets)
         val_top10_acc: Tensor = val_acc_top10_calculator(fin_predictions, fin_targets)
+        val_top1_f1: Tensor = val_f1_top1_calculator(fin_predictions, fin_targets)
+        val_top2_f1: Tensor = val_f1_top2_calculator(fin_predictions, fin_targets)
+        val_top5_f1: Tensor = val_f1_top5_calculator(fin_predictions, fin_targets)
+        val_top10_f1: Tensor = val_f1_top10_calculator(fin_predictions, fin_targets)
 
         all_log_dicts = {
             "val_loss": val_loss.item(),
@@ -595,7 +623,11 @@ class hfTrainer:
             "val_acc_top1": val_top1_acc.item(),
             "val_acc_top2":val_top2_acc.item(),
             "val_acc_top5": val_top5_acc.item(),
-            "val_acc_top10": val_top10_acc.item()
+            "val_acc_top10": val_top10_acc.item(),
+            "val_f1_top1": val_top1_f1.item(),
+            "val_f1_top2":val_top2_f1.item(),
+            "val_f1_top5": val_top5_f1.item(),
+            "val_f1_top10": val_top10_f1.item()
         }
         
         return all_log_dicts
