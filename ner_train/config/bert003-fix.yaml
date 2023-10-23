@@ -1,0 +1,33 @@
+amp:
+  enabled: true
+benchmark: false
+data_parallel: false
+hparams:
+  batch_size: 32
+  iter_per_epoch: 100
+  max_iter: 4000
+  criterion_cls:
+    type: torch.nn.CrossEntropyLoss
+  model:
+    drop_rate: 0.3
+    pretrained_name: 'bert-base-uncased'
+    num_classes: 24
+    type: ner_train.model.bert.BERTClass
+  optimizer:
+    lr: 0.001
+    type: torch.optim.SGD
+    weight_decay: 0.001
+  seed: 0
+dataset:
+  max_len : 512
+  train_dataset:
+    train_size : 0.7
+    csv_path: "/home/ham/mnt/ssd/data/dataset/resume_data/Resume/Resume-refactor-v3.csv"
+deterministic: false
+log_every_n_step: 10
+mlflow_experiment_name: kupu-oct23-ner
+mlflow_tags:
+  developer: ham
+mlflow_tracking_uri: http://localhost:8002/
+num_workers: 10
+use_cpu: false
