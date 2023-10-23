@@ -20,7 +20,7 @@ hparams:
   iter_per_epoch: 100
   max_iter: 4000
   criterion_cls:
-    type: torch.nn.BCEWithLogitsLoss
+    type: torch.nn.CrossEntropyLoss
   model:
     drop_rate: 0.3
     pretrained_name: 'bert-base-uncased'
