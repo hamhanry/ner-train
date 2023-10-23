@@ -170,5 +170,3 @@ local_export_mlflow.sh
 *.pth
 *.sh
 *.csv
-
-ner_train/config
